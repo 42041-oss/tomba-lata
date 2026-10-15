@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Derruba Latas 3D - Quermesse</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js (Motor Gráfico 3D) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Cannon.js (Motor de Física 3D) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background: #090514;
+            overflow: hidden;
+        }
+
+        .font-game {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        .pop-in {
+            animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .btn-glow {
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+            transition: all 0.2s ease;
+        }
+        .btn-glow:hover {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.8);
+        }
+        .btn-glow:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .power-card {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .power-card.active {
+            transform: translateY(-6px) scale(1.1);
+            border-color: #f59e0b;
+            box-shadow: 0 0 18px rgba(245, 158, 11, 0.8);
+        }
+
+        .light-string {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .light-bulb {
+            width: 12px;
+            height: 18px;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: blink 1.2s infinite alternate;
+        }
+        .light-bulb:nth-child(odd) { background-color: #ef4444; box-shadow: 0 0 12px #ef4444; animation-delay: 0.1s; }
+        .light-bulb:nth-child(even) { background-color: #06b6d4; box-shadow: 0 0 12px #06b6d4; animation-delay: 0.4s; }
+        .light-bulb:nth-child(3n) { background-color: #f59e0b; box-shadow: 0 0 12px #f59e0b; animation-delay: 0.7s; }
+
+        @keyframes blink {
+            0% { opacity: 0.35; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between items-center relative overflow-hidden select-none">
+
+    <!-- Luzes de Quermesse -->
+    <div class="light-string py-1 px-4">
+        <div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div>
+        <div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div>
+        <div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div>
+        <div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div>
+    </div>
+
+    <!-- HUD Superior / Placar -->
+    <header class="w-full max-w-4xl pt-5 px-4 flex justify-between items-center z-20 pointer-events-none">
+        <div class="pointer-events-auto bg-indigo-950/85 border-2 border-amber-400 rounded-2xl px-4 py-1.5 flex items-center space-x-2 shadow-xl backdrop-blur-sm">
+            <span class="text-amber-400 text-xs uppercase tracking-wider font-extrabold block">Fase</span>
+            <span id="level-display" class="font-game text-2xl text-white">1</span>
+            <span class="text-indigo-400 text-xs font-bold">/ 8</span>
+        </div>
+
+        <div class="text-center">
+            <h1 class="font-game text-2xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-amber-400 to-orange-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)] tracking-wider">
+                TIRO À LATA 3D
+            </h1>
+        </div>
+
+        <div class="flex items-center space-x-2 pointer-events-auto">
+            <div class="bg-indigo-950/85 border-2 border-amber-400 rounded-2xl px-4 py-1.5 text-right shadow-xl backdrop-blur-sm">
+                <span class="text-amber-400 text-xs uppercase tracking-wider font-extrabold block">Pontos</span>
+                <span id="score-display" class="font-game text-2xl text-yellow-300">0</span>
+            </div>
+
+            <button id="btn-sound" class="bg-indigo-900 border-2 border-indigo-400 text-white p-2 rounded-2xl hover:bg-indigo-800 transition">
+                <svg id="sound-icon-on" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                <svg id="sound-icon-off" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Canvas Container 3D -->
+    <main class="absolute inset-0 w-full h-full z-0">
+        <canvas id="webgl-canvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+
+        <div id="combo-banner" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 transform scale-50 z-30">
+            <h2 id="combo-text" class="font-game text-5xl sm:text-7xl text-yellow-300 drop-shadow-[0_6px_0_#d97706] stroke-black text-center tracking-wider">
+                STRIKE!
+            </h2>
+        </div>
+
+        <div id="floating-texts-container" class="absolute inset-0 pointer-events-none z-20 overflow-hidden"></div>
+    </main>
+
+    <!-- Rodapé: Seleção de Poderes e Bolas -->
+    <footer class="w-full max-w-4xl pb-4 px-3 flex flex-col sm:flex-row justify-between items-center gap-3 z-20 pointer-events-none">
+        <div class="pointer-events-auto bg-indigo-950/90 border-2 border-indigo-600/70 rounded-2xl px-4 py-2 flex items-center space-x-3 shadow-2xl backdrop-blur-md">
+            <span class="text-indigo-300 text-xs font-black uppercase">Bolas:</span>
+            <div id="balls-container" class="flex space-x-2"></div>
+        </div>
+
+        <div class="pointer-events-auto flex items-center space-x-2 bg-indigo-950/90 p-1.5 rounded-2xl border border-indigo-700/70 shadow-2xl backdrop-blur-md">
+            <button data-power="normal" class="power-card active flex items-center space-x-1.5 bg-slate-800 border-2 border-slate-600 px-3 py-1.5 rounded-xl text-white hover:bg-slate-700">
+                <span class="text-lg">⚾</span>
+                <span class="text-xs font-bold">Normal</span>
+            </button>
+            <button data-power="fire" class="power-card flex items-center space-x-1.5 bg-slate-800 border-2 border-slate-600 px-3 py-1.5 rounded-xl text-white hover:bg-slate-700">
+                <span class="text-lg">🔥</span>
+                <span class="text-xs font-bold text-amber-300">Fogo</span>
+            </button>
+            <button data-power="spike" class="power-card flex items-center space-x-1.5 bg-slate-800 border-2 border-slate-600 px-3 py-1.5 rounded-xl text-white hover:bg-slate-700">
+                <span class="text-lg">⚙️</span>
+                <span class="text-xs font-bold text-cyan-300">Espinhos</span>
+            </button>
+            <button data-power="split" class="power-card flex items-center space-x-1.5 bg-slate-800 border-2 border-slate-600 px-3 py-1.5 rounded-xl text-white hover:bg-slate-700">
+                <span class="text-lg">⚡</span>
+                <span class="text-xs font-bold text-purple-300">Tripla</span>
+            </button>
+        </div>
+
+        <button id="btn-reset" class="pointer-events-auto bg-gradient-to-r from-red-500 to-amber-500 hover:from-red-600 hover:to-amber-600 text-white font-game px-4 py-2 rounded-2xl shadow-xl border-2 border-yellow-300 btn-glow flex items-center space-x-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>Reiniciar</span>
+        </button>
+    </footer>
+
+    <!-- Modal Vitória / Fim de Jogo -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-gradient-to-b from-indigo-900 to-slate-900 border-4 border-amber-400 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl pop-in relative overflow-hidden">
+            <div class="absolute top-0 left-0 right-0 h-4 bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-400"></div>
+
+            <h2 id="modal-title" class="font-game text-4xl sm:text-5xl text-amber-300 mb-2 drop-shadow-md">
+                FASE CONCLUÍDA!
+            </h2>
+            <p id="modal-subtitle" class="text-indigo-200 text-sm mb-6">Excelente pontaria! Você derrubou a bancada!</p>
+
+            <div class="bg-indigo-950/70 rounded-2xl p-4 mb-6 border border-indigo-700/50 space-y-3">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-indigo-300">Latas Derrubadas:</span>
+                    <span id="modal-cans-down" class="font-game text-xl text-emerald-400">0 / 0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-indigo-300">Pontuação Total:</span>
+                    <span id="modal-score" class="font-game text-xl text-yellow-300">0</span>
+                </div>
+            </div>
+
+            <button id="btn-modal-action" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-game text-xl py-3 px-6 rounded-2xl shadow-xl border-2 border-emerald-300 btn-glow">
+                Próxima Fase ➔
+            </button>
+        </div>
+    </div>
+
+    <!-- Script Principal do Jogo 3D -->
+    <script>
+        class SoundManager {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+            }
+
+            playHit(type = 'normal') {
+                if (!this.enabled || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    if (type === 'fire') {
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(280, this.ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+                        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                    } else if (type === 'spike') {
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.25);
+                        gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    } else {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(200 + Math.random() * 100, this.ctx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.18);
+                        gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+                    }
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.3);
+                } catch (e) {}
+            }
+
+            playThrow() {
+                if (!this.enabled || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(450, this.ctx.currentTime + 0.14);
+
+                    gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.14);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.14);
+                } catch (e) {}
+            }
+
+            playExplosion() {
+                if (!this.enabled || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(130, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.5);
+
+                    gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.5);
+                } catch (e) {}
+            }
+
+            playFanfare() {
+                if (!this.enabled || !this.ctx) return;
+                try {
+                    const notes = [261.63, 329.63, 392.00, 523.25];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.09);
+
+                        gain.gain.setValueAtTime(0.35, this.ctx.currentTime + idx * 0.09);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.09 + 0.28);
+
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(this.ctx.currentTime + idx * 0.09);
+                        osc.stop(this.ctx.currentTime + idx * 0.09 + 0.28);
+                    });
+                } catch (e) {}
+            }
+        }
+
+        const sound = new SoundManager();
+
+        let scene, camera, renderer, world;
+        let tableMesh, tableBody;
+        let cans = [];
+        let balls = [];
+        let particles = [];
+
+        let currentLevel = 1;
+        const MAX_LEVELS = 8;
+        let totalScore = 0;
+        let ballsLeft = 3;
+        let selectedPower = 'normal';
+        let turnKnockedCount = 0;
+
+        let isAiming = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        let gameOver = false;
+        let levelComplete = false;
+
+        let trajectoryLine;
+        const BALL_START_POS = new THREE.Vector3(0, 2.3, 6.2);
+        const TABLE_SURFACE_Y = 1.35;
+
+        const CAN_RADIUS = 0.32;
+        const CAN_HEIGHT = 0.95;
+
+        let canTextures = {};
+        let woodTexture;
+
+        function createProceduralTextures() {
+            canTextures.normal = createCanCanvasTexture('#e11d48', '#fb7185', '★');
+            canTextures.explosive = createCanCanvasTexture('#dc2626', '#f87171', '💣');
+            canTextures.heavy = createCanCanvasTexture('#1d4ed8', '#60a5fa', '🛡️');
+
+            const canvasW = document.createElement('canvas');
+            canvasW.width = 512; canvasW.height = 512;
+            const ctxW = canvasW.getContext('2d');
+            ctxW.fillStyle = '#78350f';
+            ctxW.fillRect(0,0,512,512);
+            ctxW.fillStyle = '#451a03';
+            for (let i = 0; i < 40; i++) {
+                ctxW.fillRect(0, i * 13, 512, 4);
+            }
+            woodTexture = new THREE.CanvasTexture(canvasW);
+        }
+
+        function createCanCanvasTexture(mainColor, lightColor, icon) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 256, 0);
+            grad.addColorStop(0, mainColor);
+            grad.addColorStop(0.5, lightColor);
+            grad.addColorStop(1, mainColor);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(0, 0, 256, 24);
+            ctx.fillRect(0, 232, 256, 24);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 90px Nunito, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(icon, 128, 128);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function init3D() {
+            const canvasEl = document.getElementById('webgl-canvas');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090514);
+            scene.fog = new THREE.FogExp2(0x090514, 0.035);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 3.4, 9.8);
+            camera.lookAt(0, 2.2, 0);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            const defaultMaterial = new CANNON.Material("default");
+            const contactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
+                friction: 0.35,
+                restitution: 0.25
+            });
+            world.addContactMaterial(contactMaterial);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.1);
+            dirLight.position.set(5, 12, 8);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 25;
+            dirLight.shadow.camera.left = -6;
+            dirLight.shadow.camera.right = 6;
+            dirLight.shadow.camera.top = 8;
+            dirLight.shadow.camera.bottom = -2;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0xf59e0b, 0.8, 15);
+            pointLight.position.set(0, 5, 2);
+            scene.add(pointLight);
+
+            createProceduralTextures();
+
+            const groundGeo = new THREE.PlaneGeometry(30, 30);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e1b2e, roughness: 0.9 });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.position.y = 0;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+
+            createCarnivalBooth();
+            createWoodTable();
+            createTrajectoryLine();
+
+            window.addEventListener('resize', onWindowResize);
+            canvasEl.addEventListener('mousedown', onPointerDown);
+            canvasEl.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+
+            canvasEl.addEventListener('touchstart', onPointerDown, { passive: true });
+            canvasEl.addEventListener('touchmove', onPointerMove, { passive: true });
+            window.addEventListener('touchend', onPointerUp);
+        }
+
+        function createCarnivalBooth() {
+            const boothGroup = new THREE.Group();
+
+            for (let i = -6; i <= 6; i++) {
+                const stripeGeo = new THREE.BoxGeometry(0.8, 8, 0.1);
+                const stripeMat = new THREE.MeshStandardMaterial({
+                    color: (i % 2 === 0) ? 0xef4444 : 0xfbfbfe,
+                    roughness: 0.6
+                });
+                const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+                stripe.position.set(i * 0.8, 4, -4);
+                boothGroup.add(stripe);
+            }
+
+            const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.2, 16);
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.5 });
+            
+            const postLeft = new THREE.Mesh(postGeo, postMat);
+            postLeft.position.set(-1.8, 2.3, 6.2);
+            boothGroup.add(postLeft);
+
+            const postRight = new THREE.Mesh(postGeo, postMat);
+            postRight.position.set(1.8, 2.3, 6.2);
+            boothGroup.add(postRight);
+
+            scene.add(boothGroup);
+        }
+
+        function createWoodTable() {
+            const tableWidth = 5.4;
+            const tableHeight = 0.4;
+            const tableDepth = 2.2;
+
+            const tableGeo = new THREE.BoxGeometry(tableWidth, tableHeight, tableDepth);
+            const tableMat = new THREE.MeshStandardMaterial({
+                map: woodTexture,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+
+            tableMesh = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh.position.set(0, TABLE_SURFACE_Y - tableHeight / 2, 0);
+            tableMesh.castShadow = true;
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+
+            const legGeo = new THREE.BoxGeometry(0.3, TABLE_SURFACE_Y - tableHeight, 0.3);
+            const legPositions = [
+                [-tableWidth/2 + 0.3, (TABLE_SURFACE_Y - tableHeight)/2, -tableDepth/2 + 0.3],
+                [tableWidth/2 - 0.3, (TABLE_SURFACE_Y - tableHeight)/2, -tableDepth/2 + 0.3],
+                [-tableWidth/2 + 0.3, (TABLE_SURFACE_Y - tableHeight)/2, tableDepth/2 - 0.3],
+                [tableWidth/2 - 0.3, (TABLE_SURFACE_Y - tableHeight)/2, tableDepth/2 - 0.3]
+            ];
+
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, tableMat);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                scene.add(leg);
+            });
+
+            const tableShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, tableHeight / 2, tableDepth / 2));
+            tableBody = new CANNON.Body({ mass: 0 });
+            tableBody.addShape(tableShape);
+            tableBody.position.set(0, TABLE_SURFACE_Y - tableHeight / 2, 0);
+            world.addBody(tableBody);
+        }
+
+        function createTrajectoryLine() {
+            const points = [];
+            for (let i = 0; i < 25; i++) points.push(new THREE.Vector3());
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const lineMat = new THREE.LineDashedMaterial({
+                color: 0xf59e0b,
+                dashSize: 0.2,
+                gapSize: 0.1,
+                linewidth: 3
+            });
+            trajectoryLine = new THREE.Line(lineGeo, lineMat);
+            trajectoryLine.visible = false;
+            scene.add(trajectoryLine);
+        }
+
+        function spawnCan(x, y, z, type = 'normal') {
+            const canGeo = new THREE.CylinderGeometry(CAN_RADIUS, CAN_RADIUS, CAN_HEIGHT, 24);
+            const canMat = new THREE.MeshStandardMaterial({
+                map: canTextures[type] || canTextures.normal,
+                roughness: 0.3,
+                metalness: 0.4
+            });
+
+            const mesh = new THREE.Mesh(canGeo, canMat);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            const mass = type === 'heavy' ? 3.5 : (type === 'explosive' ? 0.9 : 1.3);
+            const canShape = new CANNON.Box(new CANNON.Vec3(CAN_RADIUS * 0.9, CAN_HEIGHT / 2, CAN_RADIUS * 0.9));
+            const body = new CANNON.Body({ mass: mass });
+            body.addShape(canShape);
+            body.position.set(x, y, z);
+
+            body.linearDamping = 0.05;
+            body.angularDamping = 0.1;
+
+            world.addBody(body);
+
+            cans.push({
+                mesh: mesh,
+                body: body,
+                type: type,
+                initialY: y,
+                isKnocked: false
+            });
+        }
+
+        function spawnBall() {
+            if (balls.some(b => b.isThrown && b.active)) return;
+
+            // Remove adequadamente a malha 3D e a física da bola anterior antes de criar a nova
+            balls.forEach(b => {
+                if (!b.isThrown) {
+                    if (b.mesh) scene.remove(b.mesh);
+                    if (b.body) world.remove(b.body);
+                }
+            });
+            balls = balls.filter(b => b.isThrown);
+
+            const ballRadius = selectedPower === 'spike' ? 0.38 : (selectedPower === 'split' ? 0.28 : 0.34);
+            const ballGeo = new THREE.SphereGeometry(ballRadius, 24, 24);
+            let ballMat;
+
+            if (selectedPower === 'fire') {
+                ballMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xf97316, emissiveIntensity: 0.6, roughness: 0.2 });
+            } else if (selectedPower === 'spike') {
+                ballMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 });
+            } else if (selectedPower === 'split') {
+                ballMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0xd8b4fe, emissiveIntensity: 0.4, roughness: 0.3 });
+            } else {
+                ballMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4 });
+            }
+
+            const mesh = new THREE.Mesh(ballGeo, ballMat);
+
+            if (selectedPower === 'spike') {
+                const spikeGeo = new THREE.ConeGeometry(0.08, 0.22, 8);
+                const spikeMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.9 });
+                for (let i = 0; i < 8; i++) {
+                    const spike = new THREE.Mesh(spikeGeo, spikeMat);
+                    const angle = (i * Math.PI) / 4;
+                    spike.position.set(Math.cos(angle) * ballRadius, Math.sin(angle) * ballRadius, 0);
+                    spike.rotation.z = angle - Math.PI / 2;
+                    mesh.add(spike);
+                }
+            }
+
+            mesh.position.copy(BALL_START_POS);
+            mesh.castShadow = true;
+            scene.add(mesh);
+
+            const mass = selectedPower === 'spike' ? 5.0 : 1.8;
+            const shape = new CANNON.Sphere(ballRadius);
+            const body = new CANNON.Body({ mass: mass });
+            body.addShape(shape);
+            body.position.copy(BALL_START_POS);
+
+            body.type = CANNON.Body.KINEMATIC;
+
+            world.addBody(body);
+
+            balls.push({
+                mesh: mesh,
+                body: body,
+                powerType: selectedPower,
+                radius: ballRadius,
+                isThrown: false,
+                active: true,
+                hitCans: new Set(),
+                hasSplit: false
+            });
+        }
+
+        function getPointerPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function onPointerDown(e) {
+            if (gameOver || levelComplete) return;
+            sound.init();
+
+            const currentBall = balls.find(b => !b.isThrown);
+
+            if (!currentBall) {
+                const activeSplitBall = balls.find(b => b.isThrown && b.powerType === 'split' && !b.hasSplit);
+                if (activeSplitBall) splitBall3D(activeSplitBall);
+                return;
+            }
+
+            isAiming = true;
+            dragStart = getPointerPos(e);
+            dragCurrent = dragStart;
+            trajectoryLine.visible = true;
+        }
+
+        function onPointerMove(e) {
+            if (!isAiming) return;
+            dragCurrent = getPointerPos(e);
+
+            const deltaX = dragCurrent.x - dragStart.x;
+            const deltaY = dragCurrent.y - dragStart.y;
+
+            const mainBall = balls.find(b => !b.isThrown);
+            if (mainBall) {
+                const clampOffset = 1.2;
+                const offsetX = Math.max(-clampOffset, Math.min(clampOffset, deltaX * 0.008));
+                const offsetY = Math.max(-clampOffset, Math.min(clampOffset, -deltaY * 0.008));
+                
+                mainBall.mesh.position.set(
+                    BALL_START_POS.x + offsetX,
+                    BALL_START_POS.y + offsetY,
+                    BALL_START_POS.z + (deltaY > 0 ? deltaY * 0.004 : 0)
+                );
+                mainBall.body.position.copy(mainBall.mesh.position);
+            }
+
+            const launchVel = calculateLaunchVelocity();
+            const points = [];
+            let simPos = mainBall ? mainBall.mesh.position.clone() : BALL_START_POS.clone();
+            let simVel = launchVel.clone();
+
+            for (let i = 0; i < 25; i++) {
+                points.push(simPos.clone());
+                simVel.y -= 9.82 * 0.025;
+                simPos.addScaledVector(simVel, 0.025);
+            }
+
+            trajectoryLine.geometry.setFromPoints(points);
+            trajectoryLine.computeLineDistances();
+        }
+
+        function onPointerUp() {
+            if (!isAiming) return;
+            isAiming = false;
+            trajectoryLine.visible = false;
+
+            const mainBall = balls.find(b => !b.isThrown);
+            if (!mainBall) return;
+
+            const launchVel = calculateLaunchVelocity();
+
+            if (launchVel.length() > 2.0) {
+                turnKnockedCount = 0;
+                mainBall.body.type = CANNON.Body.DYNAMIC;
+                mainBall.body.updateMassProperties();
+                mainBall.body.velocity.set(launchVel.x, launchVel.y, launchVel.z);
+                mainBall.body.angularVelocity.set(
+                    (Math.random() - 0.5) * 8,
+                    (Math.random() - 0.5) * 8,
+                    (Math.random() - 0.5) * 8
+                );
+                mainBall.isThrown = true;
+
+                sound.playThrow();
+
+                if (mainBall.powerType === 'split') {
+                    setTimeout(() => splitBall3D(mainBall), 280);
+                }
+
+                scheduleTurnEndCheck();
+            } else {
+                mainBall.mesh.position.copy(BALL_START_POS);
+                mainBall.body.position.copy(BALL_START_POS);
+            }
+        }
+
+        function calculateLaunchVelocity() {
+            const deltaX = dragCurrent.x - dragStart.x;
+            const deltaY = dragCurrent.y - dragStart.y;
+            const dist = Math.hypot(deltaX, deltaY);
+
+            if (dist < 10) return new THREE.Vector3(0, 0, 0);
+
+            let vx, vy, vz;
+            const sensX = 0.035;
+            const sensY = 0.040;
+
+            if (deltaY > 5) {
+                const powerRatio = Math.min(dist / 140, 1.0);
+                vx = -deltaX * sensX;
+                vy = Math.max(2.5, deltaY * sensY * 0.85);
+                vz = -(8.0 + powerRatio * 18.0);
+            } else {
+                const powerRatio = Math.min(dist / 140, 1.0);
+                vx = deltaX * sensX;
+                vy = Math.max(2.5, -deltaY * sensY * 0.85);
+                vz = -(8.0 + powerRatio * 18.0);
+            }
+
+            vx = Math.max(-8, Math.min(8, vx));
+            vy = Math.max(2, Math.min(12, vy));
+            vz = Math.max(-28, Math.min(-7, vz));
+
+            return new THREE.Vector3(vx, vy, vz);
+        }
+
+        function splitBall3D(mainBall) {
+            if (mainBall.hasSplit || !mainBall.active) return;
+            mainBall.hasSplit = true;
+
+            const spawnPos = mainBall.mesh.position.clone();
+            const currentVel = mainBall.body.velocity;
+
+            [-2.4, 2.4].forEach(offsetVx => {
+                const bMesh = mainBall.mesh.clone(true);
+                const bBody = new CANNON.Body({ mass: mainBall.body.mass });
+                bBody.addShape(new CANNON.Sphere(mainBall.radius));
+                bBody.position.copy(spawnPos);
+                bBody.type = CANNON.Body.DYNAMIC;
+                bBody.updateMassProperties();
+                bBody.velocity.set(currentVel.x + offsetVx, currentVel.y, currentVel.z);
+
+                const bObj = {
+                    mesh: bMesh,
+                    body: bBody,
+                    powerType: 'split',
+                    radius: mainBall.radius,
+                    isThrown: true,
+                    active: true,
+                    hitCans: new Set(),
+                    hasSplit: true
+                };
+
+                scene.add(bMesh);
+                world.addBody(bBody);
+                balls.push(bObj);
+            });
+
+            sound.playThrow();
+        }
+
+        function clearScene() {
+            cans.forEach(c => {
+                scene.remove(c.mesh);
+                world.remove(c.body);
+            });
+            cans = [];
+
+            balls.forEach(b => {
+                scene.remove(b.mesh);
+                world.remove(b.body);
+            });
+            balls = [];
+
+            particles.forEach(p => scene.remove(p.mesh));
+            particles = [];
+        }
+
+        function createLevel(lvl) {
+            clearScene();
+            ballsLeft = 3;
+            updateHUD();
+
+            const startY = TABLE_SURFACE_Y + CAN_HEIGHT / 2;
+            const spacingX = CAN_RADIUS * 2.1;
+            const h = CAN_HEIGHT;
+
+            switch(lvl) {
+                case 1:
+                    for (let row = 0; row < 4; row++) {
+                        const count = 4 - row;
+                        const y = startY + row * h;
+                        const startX = -((count - 1) * spacingX) / 2;
+                        for (let i = 0; i < count; i++) {
+                            const x = startX + i * spacingX;
+                            const type = (row === 2 && i === 0) ? 'explosive' : 'normal';
+                            spawnCan(x, y, 0, type);
+                        }
+                    }
+                    break;
+                case 2:
+                    [-1.1, 1.1].forEach(xOffset => {
+                        for(let yIdx = 0; yIdx < 3; yIdx++) {
+                            spawnCan(xOffset, startY + yIdx * h, 0, 'normal');
+                        }
+                    });
+                    spawnCan(-0.55, startY + 3 * h, 0, 'explosive');
+                    spawnCan(0.55, startY + 3 * h, 0, 'explosive');
+                    spawnCan(0, startY + 4 * h, 0, 'heavy');
+                    break;
+                case 3:
+                    for (let zRow = 0; zRow < 2; zRow++) {
+                        const z = -zRow * spacingX;
+                        for (let xIdx = -1; xIdx <= 1; xIdx++) {
+                            const x = xIdx * spacingX;
+                            const type = (xIdx === 0 && zRow === 0) ? 'explosive' : (zRow === 1 ? 'heavy' : 'normal');
+                            spawnCan(x, startY, z, type);
+                            spawnCan(x, startY + h, z, type === 'heavy' ? 'normal' : type);
+                        }
+                    }
+                    spawnCan(0, startY + 2 * h, -spacingX / 2, 'heavy');
+                    break;
+                case 4:
+                    for (let xIdx = -2; xIdx <= 2; xIdx++) {
+                        spawnCan(xIdx * spacingX * 0.9, startY, 0, 'heavy');
+                        spawnCan(xIdx * spacingX * 0.9, startY + h, 0, 'normal');
+                        if (Math.abs(xIdx) <= 1) {
+                            spawnCan(xIdx * spacingX * 0.9, startY + 2 * h, 0, xIdx === 0 ? 'explosive' : 'normal');
+                        }
+                    }
+                    break;
+                case 5:
+                    spawnCan(0, startY, 0, 'heavy');
+                    spawnCan(-spacingX, startY + h, 0, 'normal');
+                    spawnCan(0, startY + h, 0, 'explosive');
+                    spawnCan(spacingX, startY + h, 0, 'normal');
+                    spawnCan(-spacingX * 0.5, startY + 2 * h, 0, 'normal');
+                    spawnCan(spacingX * 0.5, startY + 2 * h, 0, 'normal');
+                    spawnCan(0, startY + 3 * h, 0, 'heavy');
+                    break;
+                case 6:
+                    [-1.4, 0, 1.4].forEach((x, idx) => {
+                        const height = idx === 1 ? 4 : 3;
+                        for(let y = 0; y < height; y++) {
+                            const type = (y === 0 && idx === 1) ? 'explosive' : (y === height - 1 ? 'heavy' : 'normal');
+                            spawnCan(x, startY + y * h, 0, type);
+                        }
+                    });
+                    break;
+                case 7:
+                    for (let y = 0; y < 6; y++) {
+                        const type = y % 2 === 1 ? 'explosive' : (y === 0 ? 'heavy' : 'normal');
+                        spawnCan(0, startY + y * h, 0, type);
+                    }
+                    spawnCan(-spacingX, startY, 0, 'normal');
+                    spawnCan(spacingX, startY, 0, 'normal');
+                    break;
+                case 8:
+                    for (let row = 0; row < 5; row++) {
+                        const count = 5 - row;
+                        const y = startY + row * h;
+                        const startX = -((count - 1) * spacingX) / 2;
+                        for (let i = 0; i < count; i++) {
+                            const x = startX + i * spacingX;
+                            let type = 'normal';
+                            if (row === 0) type = 'heavy';
+                            else if (row === 2 && (i === 1 || i === 2)) type = 'explosive';
+                            else if (row === 4) type = 'heavy';
+                            spawnCan(x, y, 0, type);
+                        }
+                    }
+                    break;
+            }
+
+            spawnBall();
+        }
+
+        let turnCheckInterval = null;
+        function scheduleTurnEndCheck() {
+            if (turnCheckInterval) clearInterval(turnCheckInterval);
+
+            let cycles = 0;
+            turnCheckInterval = setInterval(() => {
+                cycles++;
+                const allCansDown = cans.length > 0 && cans.every(c => c.isKnocked);
+                const activeBallsInAir = balls.some(b => b.active && b.isThrown && b.body.position.y > -2 && b.body.position.z > -16 && b.body.velocity.length() > 0.25);
+
+                if (allCansDown || !activeBallsInAir || cycles >= 30) {
+                    clearInterval(turnCheckInterval);
+                    turnCheckInterval = null;
+                    checkTurnEnd();
+                }
+            }, 100);
+        }
+
+        function checkTurnEnd() {
+            if (gameOver || levelComplete) return;
+
+            if (turnKnockedCount >= 4) {
+                showComboBanner("DESTRUIÇÃO TOTAL! 💥");
+            } else if (turnKnockedCount >= 2) {
+                showComboBanner("STRIKE 3D! 🔥");
+            } else if (turnKnockedCount === 1) {
+                showComboBanner("BOA! 🎯");
+            }
+
+            const allCansDown = cans.every(can => can.isKnocked);
+
+            if (allCansDown) {
+                levelComplete = true;
+                sound.playFanfare();
+                setTimeout(() => showGameOverModal(true), 600);
+            } else {
+                ballsLeft--;
+                updateHUD();
+
+                if (ballsLeft > 0) {
+                    spawnBall();
+                } else {
+                    gameOver = true;
+                    setTimeout(() => showGameOverModal(false), 800);
+                }
+            }
+        }
+
+        function updatePhysicsAndCollisions() {
+            world.step(1 / 60);
+
+            cans.forEach(can => {
+                can.mesh.position.copy(can.body.position);
+                can.mesh.quaternion.copy(can.body.quaternion);
+            });
+
+            balls.forEach(ball => {
+                if (ball.isThrown && ball.active) {
+                    ball.mesh.position.copy(ball.body.position);
+                    ball.mesh.quaternion.copy(ball.body.quaternion);
+
+                    if (ball.powerType === 'fire' && Math.random() < 0.7) {
+                        spawnFireParticle(ball.mesh.position);
+                    }
+
+                    cans.forEach((can, idx) => {
+                        if (ball.hitCans.has(idx)) return;
+
+                        const dist = ball.mesh.position.distanceTo(can.mesh.position);
+                        if (dist < ball.radius + CAN_RADIUS * 1.2) {
+                            ball.hitCans.add(idx);
+                            sound.playHit(ball.powerType);
+
+                            if (ball.powerType === 'fire') {
+                                trigger3DExplosion(ball.mesh.position, 3.5, 18);
+                            }
+
+                            if (can.type === 'explosive') {
+                                trigger3DExplosion(can.mesh.position, 4.0, 22);
+                            }
+                        }
+                    });
+
+                    if (ball.mesh.position.y < -5 || ball.mesh.position.z < -20) {
+                        ball.active = false;
+                    }
+                }
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.mesh.position.add(p.velocity);
+                p.scale -= 0.03;
+                if (p.scale <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                } else {
+                    p.mesh.scale.setScalar(p.scale);
+                }
+            }
+
+            cans.forEach(can => {
+                if (!can.isKnocked) {
+                    const euler = new THREE.Euler().setFromQuaternion(can.mesh.quaternion);
+                    const isTilted = Math.abs(euler.x) > 0.7 || Math.abs(euler.z) > 0.7;
+                    const isOffTable = can.mesh.position.y < TABLE_SURFACE_Y + 0.1 || can.mesh.position.z > 1.2 || can.mesh.position.z < -1.2;
+
+                    if (isTilted || isOffTable) {
+                        can.isKnocked = true;
+                        turnKnockedCount++;
+                        const pts = can.type === 'heavy' ? 250 : (can.type === 'explosive' ? 150 : 100);
+                        totalScore += pts;
+                        updateHUD();
+                        spawnFloatingText(can.mesh.position, `+${pts}`);
+                    }
+                }
+            });
+        }
+
+        function trigger3DExplosion(centerPos, radius, forceMag) {
+            sound.playExplosion();
+
+            for (let i = 0; i < 25; i++) {
+                spawnFireParticle(centerPos, true);
+            }
+
+            cans.forEach(can => {
+                const dir = new THREE.Vector3().subVectors(can.mesh.position, centerPos);
+                const dist = dir.length();
+
+                if (dist < radius && dist > 0) {
+                    dir.normalize();
+                    const impulse = (1 - dist / radius) * forceMag;
+                    can.body.applyImpulse(
+                        new CANNON.Vec3(dir.x * impulse, (dir.y + 0.5) * impulse, dir.z * impulse),
+                        can.body.position
+                    );
+                }
+            });
+        }
+
+        function spawnFireParticle(pos, isExplosion = false) {
+            const size = isExplosion ? 0.25 : 0.12;
+            const pGeo = new THREE.SphereGeometry(size, 8, 8);
+            const pMat = new THREE.MeshBasicMaterial({
+                color: Math.random() < 0.5 ? 0xf97316 : 0xef4444,
+                transparent: true,
+                opacity: 0.9
+            });
+            const pMesh = new THREE.Mesh(pGeo, pMat);
+            pMesh.position.copy(pos);
+            scene.add(pMesh);
+
+            particles.push({
+                mesh: pMesh,
+                scale: 1.0,
+                velocity: new THREE.Vector3(
+                    (Math.random() - 0.5) * (isExplosion ? 0.3 : 0.05),
+                    Math.random() * (isExplosion ? 0.3 : 0.08),
+                    (Math.random() - 0.5) * (isExplosion ? 0.3 : 0.05)
+                )
+            });
+        }
+
+        function spawnFloatingText(pos3D, textStr) {
+            const container = document.getElementById('floating-texts-container');
+            const el = document.createElement('div');
+            el.className = 'absolute font-game text-yellow-300 text-2xl font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-all duration-700 pointer-events-none transform -translate-x-1/2 -translate-y-1/2';
+            el.innerText = textStr;
+
+            const screenPos = pos3D.clone().project(camera);
+            const x = (screenPos.x * .5 + .5) * window.innerWidth;
+            const y = (-(screenPos.y * .5) + .5) * window.innerHeight;
+
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            container.appendChild(el);
+
+            requestAnimationFrame(() => {
+                el.style.transform = 'translate(-50%, -120%) scale(1.3)';
+                el.style.opacity = '0';
+            });
+
+            setTimeout(() => el.remove(), 750);
+        }
+
+        function showComboBanner(text) {
+            const banner = document.getElementById('combo-banner');
+            const bannerText = document.getElementById('combo-text');
+            bannerText.innerText = text;
+            banner.classList.remove('opacity-0', 'scale-50');
+            banner.classList.add('opacity-100', 'scale-100');
+
+            setTimeout(() => {
+                banner.classList.remove('opacity-100', 'scale-100');
+                banner.classList.add('opacity-0', 'scale-50');
+            }, 1200);
+        }
+
+        function updateHUD() {
+            document.getElementById('score-display').innerText = totalScore;
+            document.getElementById('level-display').innerText = currentLevel;
+
+            const ballsContainer = document.getElementById('balls-container');
+            ballsContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const ballDot = document.createElement('div');
+                ballDot.className = `w-5 h-5 rounded-full border-2 border-white shadow-md transition-all ${
+                    i < ballsLeft ? 'bg-amber-400 scale-100' : 'bg-gray-600/40 opacity-40 scale-90'
+                }`;
+                ballsContainer.appendChild(ballDot);
+            }
+        }
+
+        function showGameOverModal(victory) {
+            const modal = document.getElementById('game-over-modal');
+            const title = document.getElementById('modal-title');
+            const subtitle = document.getElementById('modal-subtitle');
+            const actionBtn = document.getElementById('btn-modal-action');
+            const cansDownText = document.getElementById('modal-cans-down');
+            const scoreText = document.getElementById('modal-score');
+
+            const knockedCount = cans.filter(c => c.isKnocked).length;
+            cansDownText.innerText = `${knockedCount} / ${cans.length}`;
+            scoreText.innerText = totalScore;
+
+            if (victory) {
+                if (currentLevel < MAX_LEVELS) {
+                    title.innerText = "FASE CONCLUÍDA!";
+                    subtitle.innerText = "Sua pontaria 3D foi fantástica!";
+                    actionBtn.innerText = "Próxima Fase ➔";
+                    actionBtn.onclick = () => {
+                        modal.classList.add('hidden');
+                        currentLevel++;
+                        ballsLeft = 3;
+                        gameOver = false;
+                        levelComplete = false;
+                        updateHUD();
+                        createLevel(currentLevel);
+                    };
+                } else {
+                    title.innerText = "MENSAGEM DE CAMPEÃO! 🏆";
+                    subtitle.innerText = "Você zerou todas as 8 fases 3D da quermesse!";
+                    actionBtn.innerText = "Jogar Novamente 🔄";
+                    actionBtn.onclick = () => {
+                        modal.classList.add('hidden');
+                        restartGame();
+                    };
+                }
+            } else {
+                title.innerText = "FIM DE JOGO!";
+                title.className = "font-game text-4xl sm:text-5xl text-rose-400 mb-2 drop-shadow-md";
+                subtitle.innerText = "Suas bolas acabaram. Tente novamente!";
+                actionBtn.innerText = "Tentar Novamente 🔄";
+                actionBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    restartGame();
+                };
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function restartGame() {
+            currentLevel = 1;
+            totalScore = 0;
+            ballsLeft = 3;
+            gameOver = false;
+            levelComplete = false;
+            updateHUD();
+            createLevel(currentLevel);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysicsAndCollisions();
+            renderer.render(scene, camera);
+        }
+
+        document.querySelectorAll('.power-card').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = e.currentTarget;
+                document.querySelectorAll('.power-card').forEach(b => b.classList.remove('active'));
+                target.classList.add('active');
+
+                selectedPower = target.dataset.power;
+
+                const unthrownBall = balls.find(b => !b.isThrown);
+                if (unthrownBall || !balls.some(b => b.active && b.isThrown)) {
+                    spawnBall();
+                }
+            });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            restartGame();
+        });
+
+        const btnSound = document.getElementById('btn-sound');
+        const iconOn = document.getElementById('sound-icon-on');
+        const iconOff = document.getElementById('sound-icon-off');
+
+        btnSound.addEventListener('click', () => {
+            sound.enabled = !sound.enabled;
+            if (sound.enabled) {
+                iconOn.classList.remove('hidden');
+                iconOff.classList.add('hidden');
+            } else {
+                iconOn.classList.add('hidden');
+                iconOff.classList.remove('hidden');
+            }
+        });
+
+        window.onload = () => {
+            init3D();
+            updateHUD();
+            createLevel(1);
+            animate();
+        };
+    </script>
+</body>
+</html>
